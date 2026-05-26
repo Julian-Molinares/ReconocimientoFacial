@@ -18,7 +18,7 @@ COLUMNAS            = ["Nombre", "Similitud (%)", "Hora", "Estado"]
 
 # Número de veces consecutivas que debe reconocerse al alumno
 # antes de registrar su asistencia
-CONFIRMACIONES_REQUERIDAS = 5
+CONFIRMACIONES_REQUERIDAS = 8
 
 
 def obtener_ruta_excel() -> str:

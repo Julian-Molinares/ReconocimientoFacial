@@ -426,7 +426,7 @@ class VentanaRegistroNuevo:
 
         frame = self._ultimo_frame
         gris  = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-        caras = DETECTOR_CARA.detectMultiScale(gris, 1.1, 8)
+        caras = DETECTOR_CARA.detectMultiScale(gris, 1.1, 5)
 
         if len(caras) == 0:
             messagebox.showwarning("Sin rostro",
