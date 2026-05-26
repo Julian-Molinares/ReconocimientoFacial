@@ -18,7 +18,6 @@ embeddings/
 fotos_registro/
 fotos_alumnos/
 asistencias/
-*.pkl
 *.xlsx
 
 # =========================
