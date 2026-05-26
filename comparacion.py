@@ -9,9 +9,18 @@ Métrica principal: DISTANCIA EUCLIDIANA
 
 Umbral dinámico:
   - Se calcula como el promedio de las distancias entre
-    las dos fotos de registro de cada alumno:
-    umbral = (dist_foto1_foto2_alumno1 + dist_foto1_foto2_alumno2 + ...) / n
-  - Guardado en embeddings/umbral.pkl al momento de registrar alumnos
+    las dos fotos de registro de cada alumno multiplicado por un factor.
+  - Guardado en embeddings/umbral.pkl al momento de registrar alumnos.
+
+MEJORAS v2:
+  - UMBRAL_DEFAULT bajado a 0.80 (era 1.10) para el modelo gaunernst
+    cuyos embeddings L2-normalizados producen distancias en el rango 0–2.
+  - UMBRAL_MIN bajado a 0.50 (era 0.50, se documenta explícitamente).
+  - FACTOR_MARGEN reducido a 1.8 (era 2.5): el preprocesamiento mejorado
+    (CLAHE + margen de ROI) reduce la variabilidad entre fotos, por lo
+    que ya no se necesita un factor tan permisivo.
+  - Se agrega UMBRAL_MAX = 1.00 para evitar umbrales demasiado altos
+    que aceptarían a cualquier persona.
 """
 
 import numpy as np
@@ -23,8 +32,14 @@ import os
 RUTA_BD     = os.path.join(os.path.dirname(__file__), "embeddings", "base_datos.pkl")
 RUTA_UMBRAL = os.path.join(os.path.dirname(__file__), "embeddings", "umbral.pkl")
 
-# ── Umbral por defecto (se reemplaza con el calculado) ─────────
-UMBRAL_DEFAULT = 1.10  # ajustado experimentalmente para foto-celular vs cámara web
+# ── Límites del umbral ─────────────────────────────────────────
+# Con vectores L2-normalizados y el modelo gaunernst/vit_small:
+#   - dist < 0.60: prácticamente la misma foto
+#   - dist 0.60–0.85: misma persona, condiciones distintas  ← zona de trabajo
+#   - dist > 1.00: personas diferentes
+UMBRAL_DEFAULT = 0.80   # umbral si no hay umbral calculado o es inválido
+UMBRAL_MIN     = 0.50   # no aceptar umbrales por debajo de esto
+UMBRAL_MAX     = 1.00   # no aceptar umbrales por encima de esto
 
 
 # ──────────────────────────────────────────────────────────────
@@ -76,31 +91,33 @@ def calcular_umbral(bd: dict) -> float:
     """
     Calcula el umbral automáticamente como el promedio de las
     distancias entre foto1 y foto2 de cada alumno, multiplicado
-    por un factor de margen para mayor tolerancia.
+    por un factor de margen para tolerar variación de iluminación.
+
+    Con el preprocesamiento mejorado (CLAHE + margen de ROI), la
+    distancia entre las dos fotos de un mismo alumno suele ser
+    0.25–0.50. El factor 1.8 da un umbral ~0.45–0.90, que queda
+    dentro de los límites [UMBRAL_MIN, UMBRAL_MAX].
 
     Fórmula:
-        umbral = promedio(dist(foto1, foto2)) * factor_margen
+        umbral = clip(promedio(dist(foto1, foto2)) * FACTOR, MIN, MAX)
 
     Args:
         bd: diccionario con embeddings de dos fotos por alumno
 
     Returns:
-        float — umbral calculado
+        float — umbral calculado y limitado al rango válido
     """
-    FACTOR_MARGEN = 2.5   # margen para compensar diferencia foto vs cámara web
+    FACTOR_MARGEN = 1.8
 
     distancias = []
     for nombre, fotos in bd.items():
         if "foto1" in fotos and "foto2" in fotos:
-            # Calcular distancia con los mismos vectores renormalizados
-            # que se usan en identificar() para que el umbral sea consistente
             ref1  = fotos["foto1"]
             ref2  = fotos["foto2"]
-            # Simular el vector representativo renormalizado
             ref   = ref1 + ref2
             norma = np.linalg.norm(ref)
             ref   = ref / norma if norma > 0 else ref
-            # Distancia entre foto1 normalizada y el vector representativo
+
             n1    = np.linalg.norm(ref1)
             ref1n = ref1 / n1 if n1 > 0 else ref1
             dist  = distancia_euclidiana(ref1n, ref)
@@ -113,20 +130,20 @@ def calcular_umbral(bd: dict) -> float:
 
     promedio = float(np.mean(distancias))
     umbral   = promedio * FACTOR_MARGEN
+    umbral   = float(np.clip(umbral, UMBRAL_MIN, UMBRAL_MAX))
     print(f"[comparacion] Promedio distancias: {promedio:.4f} × {FACTOR_MARGEN} = {umbral:.4f}")
     return umbral
 
 
 def guardar_umbral(umbral: float):
     """
-    Guarda el umbral calculado en embeddings/umbral.pkl
-    Si el valor calculado es menor al mínimo razonable, usa UMBRAL_DEFAULT.
+    Guarda el umbral calculado en embeddings/umbral.pkl.
+    Aplica el clip [UMBRAL_MIN, UMBRAL_MAX] antes de guardar.
     """
-    umbral_final = max(umbral, UMBRAL_DEFAULT)
+    umbral_final = float(np.clip(umbral, UMBRAL_MIN, UMBRAL_MAX))
     if umbral_final != umbral:
-        print(f"[comparacion] ⚠️  Umbral calculado ({umbral:.4f}) < mínimo ({UMBRAL_DEFAULT})")
-        print(f"[comparacion]    Usando umbral mínimo: {UMBRAL_DEFAULT}")
-        umbral_final = UMBRAL_DEFAULT
+        print(f"[comparacion] Umbral ajustado {umbral:.4f} → {umbral_final:.4f} "
+              f"(límites [{UMBRAL_MIN}, {UMBRAL_MAX}])")
     os.makedirs(os.path.dirname(RUTA_UMBRAL), exist_ok=True)
     with open(RUTA_UMBRAL, "wb") as f:
         pickle.dump(umbral_final, f)
@@ -136,20 +153,18 @@ def guardar_umbral(umbral: float):
 def cargar_umbral() -> float:
     """
     Retorna el umbral a usar para la identificación.
-    Según el documento sección 2.2, el umbral típico para
-    distancia euclidiana es < 0.6 (FaceNet).
-    Si existe umbral.pkl y su valor es razonable (>= 0.4), lo usa.
-    Si no existe o es muy bajo, usa el valor por defecto 0.6.
+    Si existe umbral.pkl y está dentro del rango válido, lo usa.
+    Si no, usa UMBRAL_DEFAULT.
     """
     if os.path.exists(RUTA_UMBRAL):
         with open(RUTA_UMBRAL, "rb") as f:
             umbral = pickle.load(f)
-        # Solo usar el umbral guardado si es razonable
-        if umbral >= 0.5:
+        if UMBRAL_MIN <= umbral <= UMBRAL_MAX:
             print(f"[comparacion] Umbral cargado: {umbral:.4f}")
-            return umbral
+            return float(umbral)
         else:
-            print(f"[comparacion] Umbral guardado ({umbral:.4f}) muy bajo — usando default {UMBRAL_DEFAULT}")
+            print(f"[comparacion] Umbral guardado ({umbral:.4f}) fuera de rango "
+                  f"[{UMBRAL_MIN}, {UMBRAL_MAX}] — usando default {UMBRAL_DEFAULT}")
             return UMBRAL_DEFAULT
     print(f"[comparacion] Usando umbral por defecto: {UMBRAL_DEFAULT}")
     return UMBRAL_DEFAULT
@@ -197,7 +212,7 @@ def identificar(embedding_detectado: np.ndarray, bd: dict, umbral: float):
 
     Proceso:
       1. Para cada alumno calcular su embedding representativo
-         como promedio de foto1 y foto2
+         como promedio de foto1 y foto2 (renormalizado L2)
       2. Calcular distancia euclidiana al embedding detectado
       3. Encontrar el alumno con MENOR distancia
       4. Si dist < umbral → alumno identificado

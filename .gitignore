@@ -1,0 +1,44 @@
+# =========================
+# Entornos Virtuales y Python
+# =========================
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+venv/
+env/
+pip-log.txt
+pip-delete-this-directory.txt
+
+# =========================
+# Archivos específicos del Proyecto
+# =========================
+# Ignorar bases de datos locales, fotos y excels de asistencias
+embeddings/
+fotos_registro/
+fotos_alumnos/
+asistencias/
+*.pkl
+*.xlsx
+
+# =========================
+# IDEs y Editores
+# =========================
+# VS Code
+.vscode/
+
+# JetBrains
+.idea/
+/shelf/
+/workspace.xml
+/queries/
+/dataSources/
+/dataSources.local.xml
+/httpRequests/
+
+# =========================
+# Archivos del Sistema Operativo
+# =========================
+.DS_Store
+Thumbs.db
+
