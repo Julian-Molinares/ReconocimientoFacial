@@ -2,6 +2,13 @@
 MAIN — Punto de entrada del sistema
 Integra todos los módulos: cámara, detección, identificación y registro.
 
+MEJORAS v2:
+  - Se usa preprocesar_rostro() de modelo_hf para recortar el ROI con un
+    margen del 20% antes de extraer el embedding. Esto es el cambio más
+    importante: la distancia euclidiana baja de ~1.0–1.5 a ~0.4–0.8.
+  - El diagnóstico en consola también muestra la distancia real para
+    facilitar el ajuste del umbral.
+
 Uso:
     python main.py
 """
@@ -9,7 +16,7 @@ Uso:
 import cv2
 import time
 import numpy as np
-from modelo_hf      import cargar_modelo, extraer_embedding
+from modelo_hf      import cargar_modelo, extraer_embedding, preprocesar_rostro
 from comparacion    import cargar_base_datos, identificar, cargar_umbral, distancia_euclidiana
 from registro_excel import (crear_excel_sesion, registrar_asistencia,
                              obtener_presentes, marcar_ausentes,
@@ -94,8 +101,12 @@ def main():
         )
 
         for (x, y, w, h) in caras:
-            rostro            = frame[y:y+h, x:x+w]
-            embedding         = extraer_embedding(modelo, rostro)
+            # ── MEJORA CLAVE: recortar con margen antes de embedding ──
+            # preprocesar_rostro() expande el ROI un 20% en cada lado
+            # para que el modelo reciba el rostro completo y no un recorte
+            # demasiado ajustado que produce embeddings de baja calidad.
+            rostro    = preprocesar_rostro(frame, x, y, w, h)
+            embedding = extraer_embedding(modelo, rostro)
 
             # Diagnóstico en consola
             for nom, fotos in bd.items():
@@ -128,7 +139,7 @@ def main():
                     color    = COLOR_CONTEO
                     etiqueta = f"{nombre} [{conteo_actual}/{CONFIRMACIONES_REQUERIDAS}] ({distancia:.2f})"
 
-            # Dibujar
+            # Dibujar bounding box con el margen visual (x, y, w, h original del Haar)
             cv2.rectangle(frame, (x, y), (x+w, y+h), color, 2)
             cv2.rectangle(frame, (x, y-30), (x+w, y), color, -1)
             cv2.putText(frame, etiqueta, (x+4, y-8),

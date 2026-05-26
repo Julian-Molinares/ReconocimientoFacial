@@ -18,7 +18,7 @@ from PIL import Image, ImageTk
 import numpy as np
 import threading
 
-from modelo_hf   import cargar_modelo, extraer_embedding
+from modelo_hf   import cargar_modelo, extraer_embedding, preprocesar_rostro
 from comparacion import (guardar_base_datos, guardar_umbral,
                          calcular_umbral, distancia_euclidiana, RUTA_BD)
 
@@ -258,7 +258,8 @@ class VentanaCargaDirectorio:
 
                 if len(caras) > 0:
                     x, y, w, h = caras[0]
-                    rostro = img_bgr[y:y+h, x:x+w]
+                    # Usar preprocesar_rostro para expandir el ROI con margen
+                    rostro = preprocesar_rostro(img_bgr, x, y, w, h)
                     self._log(f"    → {foto} — rostro detectado ✅")
                 else:
                     # Sin detección: usar imagen completa
@@ -435,7 +436,8 @@ class VentanaRegistroNuevo:
             return
 
         x, y, w, h = caras[0]
-        rostro = frame[y:y+h, x:x+w]
+        # Usar preprocesar_rostro para expandir el ROI con margen
+        rostro = preprocesar_rostro(frame, x, y, w, h)
         emb    = extraer_embedding(self.modelo, rostro)
         os.makedirs(CARPETA_FOTOS, exist_ok=True)
         nombre_archivo = self.var_nombre.get().strip().replace(" ", "_")
