@@ -38,7 +38,7 @@ class MenuPrincipal:
 
         self.root = tk.Tk()
         self.root.title("Sistema de Asistencia — Registro de Alumnos")
-        self.root.geometry("500x460")
+        self.root.geometry("500x530")
         self.root.configure(bg="#1a1a2e")
         self.root.resizable(False, False)
 
@@ -78,6 +78,11 @@ class MenuPrincipal:
                   command=self.abrir_lista_alumnos,
                   **btn_style).pack(pady=8)
 
+        tk.Button(frame_btns, text="⚠️  Eliminar TODOS los registros",
+                  bg="#7b0000", fg="#ffffff",
+                  command=self.eliminar_todos,
+                  **btn_style).pack(pady=8)
+
         tk.Button(frame_btns, text="🔧  Recalcular umbral",
                   bg="#16213e", fg="#f5f5f5",
                   command=self.recalcular_umbral,
@@ -99,6 +104,32 @@ class MenuPrincipal:
 
     def abrir_lista_alumnos(self):
         VentanaListaAlumnos(self.root, self.bd, self)
+
+    def eliminar_todos(self):
+        if not self.bd:
+            messagebox.showinfo("Aviso", "No hay alumnos registrados")
+            return
+        n = len(self.bd)
+        if not messagebox.askyesno(
+            "⚠️ Confirmar eliminación",
+            f"¿Eliminar TODOS los {n} alumnos registrados?\n\n"
+            "Esta acción no se puede deshacer.\n"
+            "Se borrarán base_datos.pkl y umbral.pkl"
+        ):
+            return
+
+        # Limpiar base de datos en memoria
+        self.bd.clear()
+
+        # Borrar archivos pkl
+        import os as _os
+        from comparacion import RUTA_BD, RUTA_UMBRAL
+        for ruta in [RUTA_BD, RUTA_UMBRAL]:
+            if _os.path.exists(ruta):
+                _os.remove(ruta)
+
+        self.actualizar_info()
+        messagebox.showinfo("✅ Listo", f"Se eliminaron {n} alumnos correctamente.")
 
     def recalcular_umbral(self):
         if not self.bd:
@@ -395,7 +426,7 @@ class VentanaRegistroNuevo:
 
         frame = self._ultimo_frame
         gris  = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-        caras = DETECTOR_CARA.detectMultiScale(gris, 1.1, 5)
+        caras = DETECTOR_CARA.detectMultiScale(gris, 1.1, 8)
 
         if len(caras) == 0:
             messagebox.showwarning("Sin rostro",

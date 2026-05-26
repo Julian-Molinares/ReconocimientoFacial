@@ -140,6 +140,10 @@ def main():
                       (30, 30, 30), -1)
         cv2.putText(frame, f"Presentes: {len(presentes)}", (5, 20),
                     cv2.FONT_HERSHEY_SIMPLEX, 0.6, COLOR_INFO, 2)
+        # Mostrar umbral activo en pantalla
+        h_frame, w_frame = frame.shape[:2]
+        cv2.putText(frame, f"Umbral: {umbral:.2f}", (w_frame - 150, h_frame - 10),
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.55, COLOR_INFO, 1)
         for i, p in enumerate(presentes):
             cv2.putText(frame, f"  {p}", (5, 40 + 22 * i),
                         cv2.FONT_HERSHEY_SIMPLEX, 0.5, COLOR_RECONOCIDO, 1)

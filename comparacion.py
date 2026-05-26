@@ -24,7 +24,7 @@ RUTA_BD     = os.path.join(os.path.dirname(__file__), "embeddings", "base_datos.
 RUTA_UMBRAL = os.path.join(os.path.dirname(__file__), "embeddings", "umbral.pkl")
 
 # ── Umbral por defecto (se reemplaza con el calculado) ─────────
-UMBRAL_DEFAULT = 0.6   # umbral típico según documento sección 2.2 (FaceNet)
+UMBRAL_DEFAULT = 1.10  # ajustado experimentalmente para foto-celular vs cámara web
 
 
 # ──────────────────────────────────────────────────────────────
@@ -87,7 +87,7 @@ def calcular_umbral(bd: dict) -> float:
     Returns:
         float — umbral calculado
     """
-    FACTOR_MARGEN = 1.5   # margen sobre la distancia promedio intra-clase
+    FACTOR_MARGEN = 2.5   # margen para compensar diferencia foto vs cámara web
 
     distancias = []
     for nombre, fotos in bd.items():
@@ -145,7 +145,7 @@ def cargar_umbral() -> float:
         with open(RUTA_UMBRAL, "rb") as f:
             umbral = pickle.load(f)
         # Solo usar el umbral guardado si es razonable
-        if umbral >= 0.4:
+        if umbral >= 0.5:
             print(f"[comparacion] Umbral cargado: {umbral:.4f}")
             return umbral
         else:
